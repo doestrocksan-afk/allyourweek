@@ -13,12 +13,15 @@ import { toLocalISODate } from '@/lib/dateUtils'
 
 const BASE_URL = 'https://allyourweek.com'
 
-// Home page must be dynamic — always shows CURRENT week
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+// ISR — rebuild every 30 min. No force-dynamic = no edge request per visit
+export const revalidate = 1800
+
 type Props = {
   params: Promise<{ lang: string }>
-  searchParams: Promise<{ pais?: string }>
+}
+
+export async function generateStaticParams() {
+  return LANG_CODES.map(lang => ({ lang }))
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -42,17 +45,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: rangeStr,
       url: `${BASE_URL}/${lang}`,
       siteName: 'AllYourWeek.com',
-      images: [{ url: ogUrl, width: 1200, height: 630, alt: `${L.t.week} ${week}` }],
+      images: [{ url: ogUrl, width: 1200, height: 630 }],
       locale: L.hreflang,
       type: 'website',
     },
-    twitter: { card: 'summary_large_image', title: `${L.t.week} ${week}, ${year}`, description: rangeStr, images: [ogUrl] },
+    twitter: { card: 'summary_large_image', images: [ogUrl] },
   }
 }
 
-export default async function LangHome({ params, searchParams }: Props) {
+export default async function LangHome({ params }: Props) {
   const { lang } = await params
-  const { pais } = await searchParams
   if (!LANG_CODES.includes(lang as LangCode)) notFound()
   const L = LANGS[lang as LangCode]
 
@@ -67,9 +69,7 @@ export default async function LangHome({ params, searchParams }: Props) {
   const endStr = toLocalISODate(end)
   const rangeStr = `${L.days[(start.getDay() + 6) % 7]} ${start.getDate()} ${L.months[start.getMonth()]} – ${L.days[(end.getDay() + 6) % 7]} ${end.getDate()} ${L.months[end.getMonth()]}`
   const quickWeeks = Array.from({ length: 10 }, (_, i) => week - 3 + i).filter(w => w >= 1 && w <= totalWeeks)
-
-  // Validate country from searchParam
-  const validCountry = L.countries.find(c => c.code === pais)?.code ?? L.countries[0].code
+  const defaultCountry = L.countries[0].code
   const pageUrl = `/${lang}`
 
   return (
@@ -84,22 +84,14 @@ export default async function LangHome({ params, searchParams }: Props) {
           <h2 className="hero-range">{rangeStr}</h2>
           <p className="hero-year">{year}</p>
         </div>
-        <SearchBox lang={lang as LangCode} currentYear={new Date().getFullYear()} />
+        <SearchBox lang={lang as LangCode} currentYear={year} />
         <div className="page-content">
           <section className="card">
             <h2 className="card-label">{L.t.holidaysThisWeek}</h2>
-            <HolidayList
-              lang={lang as LangCode}
-              weekStart={startStr}
-              weekEnd={endStr}
-              year={year}
-              activeCountry={validCountry}
-              pageUrl={pageUrl}
-              isCurrentWeek={true}
-            />
+            <HolidayList lang={lang as LangCode} weekStart={startStr} weekEnd={endStr} year={year} activeCountry={defaultCountry} pageUrl={pageUrl} isCurrentWeek={true} />
           </section>
           <section className="card">
-            <MiniCal lang={lang as LangCode} week={week} year={year} today={today} countryCode={validCountry} />
+            <MiniCal lang={lang as LangCode} week={week} year={year} today={today} countryCode={defaultCountry} />
           </section>
           <section className="card">
             <h2 className="card-label">{L.t.weekAtAGlance}</h2>
@@ -123,7 +115,7 @@ export default async function LangHome({ params, searchParams }: Props) {
           </section>
         </div>
       </main>
-      <Footer lang={lang as LangCode} year={new Date().getFullYear()} />
+      <Footer lang={lang as LangCode} year={year} />
     </>
   )
 }
